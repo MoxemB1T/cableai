@@ -27,8 +27,7 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY requirements.txt ./
-RUN python3 -m pip install --break-system-packages -r requirements.txt \
-    && python3 -m playwright install --with-deps chromium
+
 
 RUN python3 -m pip install --break-system-packages -r requirements.txt
 
