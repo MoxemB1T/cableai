@@ -51,8 +51,21 @@ else
     echo "[OLLAMA] Model already exists; download skipped."
 fi
 
+echo "[MCP] Checking search-mcp..."
+SEARCH_MCP_BIN="$(command -v search-mcp || true)"
+
+if [ -z "$SEARCH_MCP_BIN" ]; then
+    echo "[ERROR] search-mcp command not found."
+    echo "[DEBUG] PATH=$PATH"
+    python3 -m pip show free-search-mcp || true
+    python3 -m pip show -f free-search-mcp || true
+    exit 1
+fi
+
+echo "[MCP] Using: $SEARCH_MCP_BIN"
 echo "[MCP] Starting free-search-mcp on 127.0.0.1:8001..."
-search-mcp > /var/log/free-search-mcp.log 2>&1 &
+
+"$SEARCH_MCP_BIN" > /var/log/free-search-mcp.log 2>&1 &
 MCP_PID=$!
 
 for i in $(seq 1 60); do
