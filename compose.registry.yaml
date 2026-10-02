@@ -1,0 +1,8 @@
+services:
+  cable-ai:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-REPLACE_ME}/cable-ai:latest
+    build: null
+
+  web-search:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-REPLACE_ME}/cable-ai-free-search-mcp:latest
+    build: null

@@ -1,0 +1,74 @@
+name: cable-ai
+
+services:
+  cable-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cable-ai:local
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:14b}
+      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-32768}
+      CABLE_AI_HOST: 0.0.0.0
+      CABLE_AI_PORT: 8000
+      CABLE_AI_MAX_ITEMS: ${CABLE_AI_MAX_ITEMS:-20}
+      CABLE_AI_MAX_TOOL_ROUNDS: ${CABLE_AI_MAX_TOOL_ROUNDS:-8}
+      CABLE_AI_DB_PATH: /app/persist/catalog.db
+      WEB_MCP_URL: http://web-search:8001/mcp
+      WEB_MCP_RESEARCH_DEPTH: ${WEB_MCP_RESEARCH_DEPTH:-1}
+      WEB_MCP_MAX_RESULT_CHARS: ${WEB_MCP_MAX_RESULT_CHARS:-3500}
+    volumes:
+      - cable-ai-data:/app/persist
+    depends_on:
+      ollama:
+        condition: service_healthy
+      web-search:
+        condition: service_started
+    ports:
+      - "${CABLE_AI_BIND:-127.0.0.1}:${CABLE_AI_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
+    volumes:
+      - ollama-data:/root/.ollama
+    expose:
+      - "11434"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 15s
+
+  web-search:
+    build:
+      context: ./docker/free-search-mcp
+    image: cable-ai-free-search-mcp:0.13.1
+    restart: unless-stopped
+    environment:
+      SEARCH_MCP_TRANSPORT: streamable-http
+      SEARCH_MCP_HTTP_HOST: 0.0.0.0
+      SEARCH_MCP_HTTP_PORT: 8001
+      SEARCH_MCP_HTTP_PATH: /mcp
+      SEARCH_MCP_CACHE_DIR: /data
+      SEARCH_MCP_DEFAULT_ENGINES: ${SEARCH_MCP_DEFAULT_ENGINES:-["duckduckgo","mojeek","bing","anysearch"]}
+    volumes:
+      - web-search-data:/data
+    expose:
+      - "8001"
+
+volumes:
+  cable-ai-data:
+  ollama-data:
+  web-search-data:

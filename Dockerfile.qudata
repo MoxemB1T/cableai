@@ -1,0 +1,45 @@
+FROM ollama/ollama:latest
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    OLLAMA_HOST=127.0.0.1:11434 \
+    OLLAMA_MODEL=hf.co/Qwen/Qwen3-14B-GGUF:Q4_K_M \
+    OLLAMA_NUM_CTX=32768 \
+    OLLAMA_KEEP_ALIVE=30m \
+    CABLE_AI_HOST=0.0.0.0 \
+    CABLE_AI_PORT=8000 \
+    CABLE_AI_DB_PATH=/app/persist/catalog.db \
+    WEB_MCP_URL=http://127.0.0.1:8001/mcp \
+    WEB_MCP_RESEARCH_DEPTH=1 \
+    WEB_MCP_MAX_RESULT_CHARS=3500 \
+    SEARCH_MCP_TRANSPORT=streamable-http \
+    SEARCH_MCP_HTTP_HOST=127.0.0.1 \
+    SEARCH_MCP_HTTP_PORT=8001 \
+    SEARCH_MCP_HTTP_PATH=/mcp \
+    SEARCH_MCP_CACHE_DIR=/app/web-search-data
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-pip python3-venv curl ca-certificates git procps \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN python3 -m pip install --break-system-packages -r requirements.txt \
+    && python3 -m playwright install --with-deps chromium
+
+RUN python3 -m pip install --break-system-packages free-search-mcp==0.13.1
+
+COPY app.py tools.py mcp_web.py import_data.py ./
+COPY catalog.db ./
+COPY data ./data
+COPY qudata-entrypoint.sh ./
+RUN chmod +x /app/qudata-entrypoint.sh
+
+RUN mkdir -p /app/persist /app/web-search-data
+
+EXPOSE 8000
+
+ENTRYPOINT ["/app/qudata-entrypoint.sh"]
