@@ -30,7 +30,7 @@ COPY requirements.txt ./
 RUN python3 -m pip install --break-system-packages -r requirements.txt \
     && python3 -m playwright install --with-deps chromium
 
-RUN python3 -m pip install --break-system-packages free-search-mcp==0.13.1
+RUN python3 -m pip install --break-system-packages -r requirements.txt
 
 COPY app.py tools.py mcp_web.py import_data.py ./
 COPY catalog.db ./
