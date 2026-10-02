@@ -18,7 +18,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     SEARCH_MCP_HTTP_HOST=127.0.0.1 \
     SEARCH_MCP_HTTP_PORT=8001 \
     SEARCH_MCP_HTTP_PATH=/mcp \
-    SEARCH_MCP_CACHE_DIR=/app/web-search-data
+    SEARCH_MCP_CACHE_DIR=/app/web-search-data \
+    PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/sbin:/bin:${PATH}"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-pip python3-venv curl ca-certificates git procps \
@@ -28,8 +29,8 @@ WORKDIR /app
 
 COPY requirements.txt ./
 
-
-RUN python3 -m pip install --break-system-packages -r requirements.txt
+RUN python3 -m pip install --break-system-packages free-search-mcp==0.13.1 \
+    && python3 -c "import shutil; p=shutil.which('search-mcp'); print('search-mcp:', p); assert p, 'search-mcp was not installed'"
 
 COPY app.py tools.py mcp_web.py import_data.py ./
 COPY catalog.db ./
