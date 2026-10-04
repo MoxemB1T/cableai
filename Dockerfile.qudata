@@ -28,6 +28,7 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY requirements.txt ./
+RUN python3 -m pip install --break-system-packages -r requirements.txt
 
 RUN python3 -m pip install --break-system-packages free-search-mcp==0.13.1 \
     && python3 -c "import shutil; p=shutil.which('search-mcp'); print('search-mcp:', p); assert p, 'search-mcp was not installed'"
