@@ -21,14 +21,12 @@ from tools import search_catalog, search_available_cables, get_cable, check_stoc
 from mcp_web import free_search_web_many
 
 
-MODEL = os.getenv("OLLAMA_MODEL", "hf.co/Qwen/Qwen3-14B-GGUF:Q4_K_M")
+MODEL = os.getenv("OLLAMA_MODEL", "qwen3-14b")
 NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "32768"))
 HOST = os.getenv("CABLE_AI_HOST", "0.0.0.0")
 PORT = int(os.getenv("CABLE_AI_PORT", "8000"))
 MAX_ITEMS = int(os.getenv("CABLE_AI_MAX_ITEMS", "20"))
 WEB_MAX_PER_ITEM = int(os.getenv("WEB_MCP_MAX_RESULT_CHARS", "3500"))
-WEB_MCP_URL = os.getenv("WEB_MCP_URL", "http://127.0.0.1:8001/mcp")
-DB_PATH = os.getenv("CABLE_AI_DB_PATH", os.path.join(os.path.dirname(__file__), "catalog.db"))
 
 
 EXTRACT_PROMPT = r"""
@@ -301,43 +299,34 @@ def _clean(value: Any) -> str:
 
 
 def render_reply(data: dict[str, Any]) -> str:
-    """Render the server reply as a real HTML table suitable for the email editor."""
-    base_style = "border:1px solid #1f2937;padding:8px;text-align:left;vertical-align:top;"
-    header_style = base_style + "font-weight:600;background:#fff;"
-    parts = [
-        '<div style="font-family:Arial,sans-serif;font-size:13px;line-height:1.4;color:#111827;">'
-    ]
+    parts = ['<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.4;">']
     intro = _clean(data.get("intro"))
     if intro:
-        parts.append(f'<p style="margin:0 0 8px;">{intro}</p>')
+        parts.append(f"<p>{intro}</p>")
 
     parts.append(
-        '<table style="border-collapse:collapse;width:100%;table-layout:auto;font-family:Arial,sans-serif;font-size:13px;">'
+        '<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;width:100%;max-width:1100px;">'
         "<thead><tr>"
-        f'<th style="{header_style}">Запрос</th>'
-        f'<th style="{header_style}">Наименование</th>'
-        f'<th style="{header_style}">Артикул</th>'
-        f'<th style="{header_style}">Цена за 1 м</th>'
-        f'<th style="{header_style}">Срок поставки</th>'
-        f'<th style="{header_style}">Комментарий</th>'
+        "<th>Запрос</th><th>Наименование</th><th>Артикул</th>"
+        "<th>Цена за 1 м</th><th>Срок поставки</th><th>Комментарий</th>"
         "</tr></thead><tbody>"
     )
     for row in data.get("rows", []):
         parts.append(
             "<tr>"
-            f'<td style="{base_style}">{_clean(row.get("request"))}</td>'
-            f'<td style="{base_style}">{_clean(row.get("name"))}</td>'
-            f'<td style="{base_style}">{_clean(row.get("article"))}</td>'
-            f'<td style="{base_style}">{_clean(row.get("price") or "Уточняется")}</td>'
-            f'<td style="{base_style}">{_clean(row.get("delivery"))}</td>'
-            f'<td style="{base_style}">{_clean(row.get("comment"))}</td>'
+            f"<td>{_clean(row.get('request'))}</td>"
+            f"<td>{_clean(row.get('name'))}</td>"
+            f"<td>{_clean(row.get('article'))}</td>"
+            f"<td>{_clean(row.get('price') or 'Уточняется')}</td>"
+            f"<td>{_clean(row.get('delivery'))}</td>"
+            f"<td>{_clean(row.get('comment'))}</td>"
             "</tr>"
         )
     parts.append("</tbody></table>")
 
     closing = _clean(data.get("closing"))
     if closing:
-        parts.append(f'<p style="margin:6px 0 0;">{closing}</p>')
+        parts.append(f"<p>{closing}</p>")
     parts.append("</div>")
     return "".join(parts)
 
@@ -390,7 +379,7 @@ def process_emails(payload: EmailsRequest):
 
 
 def main():
-    if not os.path.exists(DB_PATH):
+    if not os.path.exists("catalog.db"):
         print("Ошибка: catalog.db не найден. Сначала запустите import_data.py")
         raise SystemExit(1)
 
@@ -402,7 +391,7 @@ def main():
     print(f"Model:   {MODEL}")
     print(f"Context: {NUM_CTX}")
     print(f"Server:  http://{HOST}:{PORT}")
-    print(f"Web MCP: {WEB_MCP_URL}")
+    print("Web MCP: http://127.0.0.1:8001/mcp")
     print("Thinking: OFF")
     print("======================================")
     uvicorn.run(app, host=HOST, port=PORT)
