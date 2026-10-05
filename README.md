@@ -214,3 +214,13 @@ docker compose -f compose.yaml -f compose.registry.yaml up -d
 For Qudata.ai use `Dockerfile.qudata` and `.github/workflows/ghcr-qudata.yml`. This variant is intentionally a single container because Qudata templates are configured around one Docker image plus an on-start Command. It starts Ollama, automatically pulls the official Qwen3-14B GGUF Q4_K_M model through Ollama when absent, starts free-search-mcp, and then starts Cable AI.
 
 See `QUData.md` for the exact Qudata template values.
+
+
+## Управление из расширения
+
+В popup расширения добавлены:
+- **Обновить каталог** — загрузка нового PDF каталога на `/admin/update-catalog`. Каталог заменяется целиком, остатки и товары в пути сохраняются. Обновление отклоняется, если новый PDF не содержит артикулы, которые используются в текущих остатках/товарах в пути.
+- **Обновить остатки и товары в пути** — загрузка XLSX на `/admin/update-stock`. Листы `Товары на складе` и `Товары в пути` заменяются целиком.
+- **Промты** — редактирование трёх промтов: извлечение позиций, финальный подбор и веб-исследование. Они сохраняются в `data/prompts.json` и загружаются сервером при каждом новом запросе.
+
+Для загрузки XLSX/PDF через FastAPI добавлена зависимость `python-multipart`.
