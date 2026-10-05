@@ -101,7 +101,11 @@ WEB:
 app = FastAPI(title="Cable AI", version="2.0.0")
 app.add_middleware(
     CORSMiddleware,
+    # Roundcube + Chrome Extension.
+    # The extension origin is dynamic (chrome-extension://<extension-id>),
+    # so do not hard-code the extension ID or server IP here.
     allow_origins=["https://webmail.sweb.ru"],
+    allow_origin_regex=r"^chrome-extension://[a-p]{32}$",
     allow_credentials=True,
     allow_methods=["POST", "OPTIONS"],
     allow_headers=["Content-Type"],
