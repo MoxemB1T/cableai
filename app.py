@@ -6,6 +6,7 @@ import os
 import re
 import json
 import tempfile
+import zipfile
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -318,7 +319,19 @@ async def update_stock(file: UploadFile = File(...)):
     os.close(fd)
     tmp = Path(tmp_name)
     try:
-        tmp.write_bytes(await file.read())
+        content = await file.read()
+        if not content:
+            raise ValueError("Получен пустой файл.")
+        tmp.write_bytes(content)
+        # XLSX/XLSM are ZIP-based Office files. Give a clear error instead of
+        # exposing openpyxl's generic "File is not a zip file" message.
+        if suffix in {".xlsx", ".xlsm"}:
+            try:
+                with zipfile.ZipFile(tmp) as zf:
+                    if zf.testzip() is not None:
+                        raise ValueError("Файл XLSX повреждён: архив Office не читается.")
+            except zipfile.BadZipFile as exc:
+                raise ValueError("Сервер получил файл, который не является корректным XLSX/XLSM. Перезагрузите файл через кнопку обновления.") from exc
         result = _replace_stock_from_xlsx(tmp)
         return {"ok": True, "type": "stock", **result}
     except Exception as exc:
