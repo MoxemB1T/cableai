@@ -4,8 +4,8 @@ import html
 import json
 import os
 import re
-import json
 import tempfile
+import sqlite3
 import zipfile
 import threading
 from datetime import datetime
@@ -405,10 +405,56 @@ def _compact_candidate(item: dict[str, Any]) -> dict[str, Any]:
     keys = (
         "article", "family", "designation", "core_count", "section_mm2",
         "core_marking", "voltage", "shielded", "conductor_material",
-        "flexibility", "outer_diameter_mm", "availability_status",
-        "incoming_arrival_date", "match_score",
+        "flexibility", "outer_diameter_mm", "current_stock",
+        "availability_status", "incoming_arrival_date", "incoming_qty",
+        "match_score",
     )
     return {k: item.get(k) for k in keys if k in item}
+
+
+def _availability_by_article(articles: list[str]) -> dict[str, dict[str, Any]]:
+    """Return authoritative availability from SQLite; never infer it from LLM output."""
+    normalized = [str(a).strip() for a in articles if str(a).strip()]
+    if not normalized:
+        return {}
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    try:
+        placeholders = ",".join("?" for _ in normalized)
+        stock_rows = con.execute(
+            f"SELECT article, COALESCE(qty,0) AS qty FROM stock WHERE article IN ({placeholders})",
+            normalized,
+        ).fetchall()
+        incoming_rows = con.execute(
+            f"""SELECT article, MIN(arrival_date) AS arrival_date,
+                       SUM(COALESCE(qty,0)) AS incoming_qty
+                  FROM incoming
+                 WHERE article IN ({placeholders})
+                 GROUP BY article""",
+            normalized,
+        ).fetchall()
+    finally:
+        con.close()
+
+    result: dict[str, dict[str, Any]] = {}
+    for row in stock_rows:
+        article = str(row["article"]).strip()
+        result.setdefault(article, {})["current_stock"] = float(row["qty"] or 0)
+    for row in incoming_rows:
+        article = str(row["article"]).strip()
+        result.setdefault(article, {})["incoming_qty"] = float(row["incoming_qty"] or 0)
+        result[article]["incoming_arrival_date"] = row["arrival_date"]
+
+    for article, info in result.items():
+        # HARD RULE: physical stock always wins. Incoming does not make a
+        # zero-stock item "in stock", and incoming never overwrites stock.
+        if info.get("current_stock", 0) > 0:
+            info["availability_status"] = "В наличии"
+        elif info.get("incoming_qty", 0) > 0:
+            info["availability_status"] = "В пути на склад"
+        else:
+            info["availability_status"] = ""
+    return result
 
 
 def _local_package(request: str) -> dict[str, Any]:
@@ -483,6 +529,13 @@ def _finalize(email_text: str, items: list[str]) -> dict[str, Any]:
         raise RuntimeError("Qwen returned invalid JSON")
 
     rows = data.get("rows") if isinstance(data.get("rows"), list) else []
+
+    # Availability is authoritative data from SQLite, not an LLM decision.
+    # This prevents a cable that is only incoming from being reported as
+    # physically available on the warehouse shelf.
+    articles = [str(row.get("article") or "").strip() for row in rows if isinstance(row, dict)]
+    availability = _availability_by_article(articles)
+
     by_request: dict[str, dict] = {}
     for row in rows:
         if isinstance(row, dict):
@@ -505,6 +558,22 @@ def _finalize(email_text: str, items: list[str]) -> dict[str, Any]:
             }
         row.setdefault("request", request)
         row.setdefault("price", "Уточняется")
+
+        article = str(row.get("article") or "").strip()
+        stock_info = availability.get(article) if article else None
+        if stock_info:
+            # Overwrite the model's delivery value with the database truth.
+            row["delivery"] = stock_info["availability_status"]
+            if stock_info.get("availability_status") == "В пути на склад":
+                row["comment"] = _append_delivery_note(
+                    row.get("comment"),
+                    stock_info.get("incoming_qty"),
+                    stock_info.get("incoming_arrival_date"),
+                )
+        else:
+            # A catalog article without a stock/incoming record is not
+            # available for sale from the local inventory pipeline.
+            row["delivery"] = ""
         fixed_rows.append(row)
 
     return {
@@ -512,6 +581,20 @@ def _finalize(email_text: str, items: list[str]) -> dict[str, Any]:
         "rows": fixed_rows,
         "closing": str(data.get("closing") or ""),
     }
+
+
+def _append_delivery_note(comment: Any, incoming_qty: Any, arrival_date: Any) -> str:
+    base = str(comment or "").strip()
+    parts = []
+    if incoming_qty is not None and float(incoming_qty or 0) > 0:
+        qty = int(incoming_qty) if float(incoming_qty).is_integer() else float(incoming_qty)
+        parts.append(f"В пути на склад: {qty} шт.")
+    if arrival_date:
+        parts.append(f"Дата поступления: {arrival_date}.")
+    note = " ".join(parts)
+    if not note:
+        return base
+    return f"{base} {note}".strip()
 
 
 def _clean(value: Any) -> str:
